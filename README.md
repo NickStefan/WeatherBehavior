@@ -17,8 +17,8 @@ conditions clear the items are unequipped again, and any copies the mod added ar
 NPC inventories are left as they were.
 
 Everything is configured through the **SKSE Menu Framework** UI (section *Weather Behavior*).
-The item picker enumerates the wearable armor/clothing in your load order (with a search box,
-a wearable-slots filter, and an "in my inventory only" filter) so you only ever pick real items.
+The item picker enumerates the wearable armor/clothing in your load order (with a search box
+and an "in my inventory only" filter) so you only ever pick real items.
 
 Settings are saved to `Data/SKSE/Plugins/WeatherBehavior.json`.
 

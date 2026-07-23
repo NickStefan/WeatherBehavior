@@ -28,7 +28,6 @@ namespace WeatherBehavior
 
 		char gItemSearch[128]{};
 		char gRaceSearch[128]{};
-		bool gWearableOnly{ true };
 		bool gInventoryOnly{ false };
 
 		std::string ToLower(std::string_view a_text)
@@ -140,8 +139,6 @@ namespace WeatherBehavior
 
 		void RenderItemPicker(std::vector<FormRef>& a_items)
 		{
-			ImGui::Checkbox("Wearable only", &gWearableOnly);
-			ImGui::SameLine();
 			ImGui::Checkbox("Player inventory only", &gInventoryOnly);
 			ImGui::InputTextWithHint("##itemsearch", "Search clothing/armor...", gItemSearch, sizeof(gItemSearch));
 
@@ -169,8 +166,7 @@ namespace WeatherBehavior
 					if (!armor) {
 						continue;
 					}
-					if (gWearableOnly &&
-						(static_cast<std::uint32_t>(armor->GetSlotMask()) & kWearableSlots) == 0) {
+					if ((static_cast<std::uint32_t>(armor->GetSlotMask()) & kWearableSlots) == 0) {
 						continue;
 					}
 					if (gInventoryOnly && !playerItems.contains(armor->GetFormID())) {
