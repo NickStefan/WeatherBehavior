@@ -7,6 +7,8 @@
 #include <mutex>
 #include <unordered_set>
 
+#include <Windows.h>
+
 #include "Config.h"
 #include "Manager.h"
 #include "Util.h"
@@ -31,6 +33,30 @@ namespace WeatherBehavior
 			std::string out(a_text);
 			std::transform(out.begin(), out.end(), out.begin(), [](unsigned char c) { return std::tolower(c); });
 			return out;
+		}
+
+		using GetFormEditorIDFunc = const char* (*)(std::uint32_t);
+
+		GetFormEditorIDFunc Po3GetEditorID()
+		{
+			static const auto func = []() -> GetFormEditorIDFunc {
+				if (const auto tweaks = ::GetModuleHandleW(L"po3_Tweaks")) {
+					return reinterpret_cast<GetFormEditorIDFunc>(::GetProcAddress(tweaks, "GetFormEditorID"));
+				}
+				return nullptr;
+			}();
+			return func;
+		}
+
+		const char* GetEditorID(const RE::TESForm* a_form)
+		{
+			if (const auto edid = a_form->GetFormEditorID(); edid && edid[0]) {
+				return edid;
+			}
+			if (const auto func = Po3GetEditorID()) {
+				return func(a_form->GetFormID());
+			}
+			return nullptr;
 		}
 
 		void EditString(const char* a_label, std::string& a_value)
@@ -82,6 +108,9 @@ namespace WeatherBehavior
 
 		void RenderItemPicker(std::vector<std::string>& a_items)
 		{
+			if (!Po3GetEditorID()) {
+				ImGui::TextWrapped("powerofthree's Tweaks is required to list clothing here.");
+			}
 			ImGui::Checkbox("Player inventory only", &gInventoryOnly);
 			ImGui::InputTextWithHint("##itemsearch", "Search clothing/armor...", gItemSearch, sizeof(gItemSearch));
 
@@ -112,7 +141,7 @@ namespace WeatherBehavior
 					if (gInventoryOnly && !playerItems.contains(armor->GetFormID())) {
 						continue;
 					}
-					const auto edid = armor->GetFormEditorID();
+					const auto edid = GetEditorID(armor);
 					if (!edid || !edid[0]) {
 						continue;
 					}
