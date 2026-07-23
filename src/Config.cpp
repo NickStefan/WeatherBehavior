@@ -165,9 +165,6 @@ namespace WeatherBehavior
 		rule.chance = std::min<std::uint32_t>(100, a_jr.value("chance", 100u));
 		rule.weatherMask = a_jr.value("weatherMask", 0u);
 		rule.seasonMask = a_jr.value("seasonMask", 0u);
-		if (a_jr.contains("excludedRaces")) {
-			rule.excludedRaces = ParseRefs(a_jr["excludedRaces"]);
-		}
 		if (a_jr.contains("items")) {
 			rule.items = ParseRefs(a_jr["items"]);
 		}
@@ -184,7 +181,6 @@ namespace WeatherBehavior
 		jr["chance"] = a_rule.chance;
 		jr["weatherMask"] = a_rule.weatherMask;
 		jr["seasonMask"] = a_rule.seasonMask;
-		jr["excludedRaces"] = DumpRefs(a_rule.excludedRaces);
 		jr["items"] = DumpRefs(a_rule.items);
 		return jr;
 	}

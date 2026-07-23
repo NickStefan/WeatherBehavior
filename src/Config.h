@@ -35,7 +35,6 @@ namespace WeatherBehavior
 		std::uint32_t        chance{ 100 };
 		std::uint32_t        weatherMask{ 0 };
 		std::uint32_t        seasonMask{ 0 };
-		std::vector<FormRef> excludedRaces;
 		std::vector<FormRef> items;
 
 		[[nodiscard]] bool EnvMatches(std::uint32_t a_weather, std::uint32_t a_season) const;

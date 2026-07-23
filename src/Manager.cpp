@@ -142,15 +142,6 @@ namespace WeatherBehavior
 		}
 	}
 
-	namespace
-	{
-		struct ActiveRule
-		{
-			const Rule*                    rule{ nullptr };
-			std::unordered_set<RE::FormID> excludedRaces;
-		};
-	}
-
 	void Manager::Apply()
 	{
 		auto& config = Config::GetSingleton();
@@ -164,19 +155,11 @@ namespace WeatherBehavior
 		const std::uint32_t weather = _lastWeather;
 		const std::uint32_t season = _lastSeason;
 
-		std::vector<ActiveRule> active;
+		std::vector<const Rule*> active;
 		for (const auto& rule : config.rules) {
-			if (!rule.EnvMatches(weather, season)) {
-				continue;
+			if (rule.EnvMatches(weather, season)) {
+				active.push_back(&rule);
 			}
-			ActiveRule ar;
-			ar.rule = &rule;
-			for (const auto& r : rule.excludedRaces) {
-				if (const auto id = r.ResolveID()) {
-					ar.excludedRaces.insert(id);
-				}
-			}
-			active.push_back(std::move(ar));
 		}
 
 		processLists->ForEachHighActor([&](RE::Actor* a_actor) {
@@ -189,18 +172,14 @@ namespace WeatherBehavior
 			const bool indoors = config.onlyOutdoors && a_actor->GetParentCell() &&
 			                     a_actor->GetParentCell()->IsInteriorCell();
 			const RE::FormID actorID = a_actor->GetFormID();
-			const RE::FormID raceID = a_actor->GetRace() ? a_actor->GetRace()->GetFormID() : 0;
 
 			std::unordered_set<RE::FormID> desired;
 			if (!indoors) {
-				for (const auto& ar : active) {
-					if (ar.rule->target == Target::kFollowersOnly && !isFollower) {
+				for (const auto rule : active) {
+					if (rule->target == Target::kFollowersOnly && !isFollower) {
 						continue;
 					}
-					if (raceID != 0 && ar.excludedRaces.contains(raceID)) {
-						continue;
-					}
-					SelectItems(*ar.rule, actorID, desired);
+					SelectItems(*rule, actorID, desired);
 				}
 			}
 

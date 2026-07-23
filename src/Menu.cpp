@@ -27,7 +27,6 @@ namespace WeatherBehavior
 		constexpr int kMaxShown = 300;
 
 		char gItemSearch[128]{};
-		char gRaceSearch[128]{};
 		bool gInventoryOnly{ false };
 
 		std::string ToLower(std::string_view a_text)
@@ -92,49 +91,6 @@ namespace WeatherBehavior
 				                      nullptr;
 				ImGui::TextUnformatted(form ? DisplayName(form).c_str() : a_list[i].Serialize().c_str());
 			}
-		}
-
-		template <class T>
-		void RenderRefPicker(std::vector<FormRef>& a_list, char* a_search, std::size_t a_searchSize, const char* a_hint)
-		{
-			ImGui::InputTextWithHint("##search", a_hint, a_search, a_searchSize);
-
-			const auto handler = RE::TESDataHandler::GetSingleton();
-			if (!handler) {
-				return;
-			}
-			const std::string needle = ToLower(a_search);
-
-			if (ImGui::BeginChild("##list", ImVec2(0, 160), true)) {
-				int shown = 0;
-				for (const auto form : handler->GetFormArray<T>()) {
-					if (!form) {
-						continue;
-					}
-					const std::string name = DisplayName(form);
-					if (!needle.empty() && ToLower(name).find(needle) == std::string::npos) {
-						continue;
-					}
-					if (shown++ >= kMaxShown) {
-						ImGui::TextDisabled("...refine search to see more");
-						break;
-					}
-
-					const FormRef ref = FormRef::From(form);
-					ImGui::PushID(static_cast<int>(form->GetFormID()));
-					if (ContainsRef(a_list, ref)) {
-						ImGui::BeginDisabled();
-						ImGui::SmallButton("Added");
-						ImGui::EndDisabled();
-					} else if (ImGui::SmallButton("Add")) {
-						a_list.push_back(ref);
-					}
-					ImGui::PopID();
-					ImGui::SameLine();
-					ImGui::TextUnformatted(name.c_str());
-				}
-			}
-			ImGui::EndChild();
 		}
 
 		void RenderItemPicker(std::vector<FormRef>& a_items)
@@ -240,11 +196,6 @@ namespace WeatherBehavior
 				}
 
 				ImGui::Spacing();
-				if (ImGui::TreeNode(std::format("Excluded races ({})###races", a_rule.excludedRaces.size()).c_str())) {
-					RenderRefList(a_rule.excludedRaces);
-					RenderRefPicker<RE::TESRace>(a_rule.excludedRaces, gRaceSearch, sizeof(gRaceSearch), "Search races...");
-					ImGui::TreePop();
-				}
 				if (ImGui::TreeNode(std::format("Items to equip ({})###items", a_rule.items.size()).c_str())) {
 					RenderRefList(a_rule.items);
 					RenderItemPicker(a_rule.items);
