@@ -47,7 +47,6 @@ namespace WeatherBehavior
 		_lastRevision = std::numeric_limits<std::uint32_t>::max();
 		_lastWeather = 0;
 		_lastSeason = 0;
-		_lastRegion = 0;
 	}
 
 	void Manager::PollLoop()
@@ -87,17 +86,14 @@ namespace WeatherBehavior
 
 		const std::uint32_t weather = WeatherClassOf(sky->currentWeather);
 		const std::uint32_t season = SeasonBitOf(calendar->GetMonth());
-		const RE::FormID     region = sky->region ? sky->region->GetFormID() : 0;
 		const std::uint32_t revision = config.Revision();
 
-		if (weather == _lastWeather && season == _lastSeason && region == _lastRegion &&
-			revision == _lastRevision) {
+		if (weather == _lastWeather && season == _lastSeason && revision == _lastRevision) {
 			return;
 		}
 
 		_lastWeather = weather;
 		_lastSeason = season;
-		_lastRegion = region;
 		_lastRevision = revision;
 
 		Apply();
@@ -167,11 +163,10 @@ namespace WeatherBehavior
 
 		const std::uint32_t weather = _lastWeather;
 		const std::uint32_t season = _lastSeason;
-		const RE::FormID     region = _lastRegion;
 
 		std::vector<ActiveRule> active;
 		for (const auto& rule : config.rules) {
-			if (!rule.EnvMatches(weather, season, region)) {
+			if (!rule.EnvMatches(weather, season)) {
 				continue;
 			}
 			ActiveRule ar;

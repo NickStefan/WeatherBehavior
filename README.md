@@ -11,7 +11,6 @@ under conditions you pick:
 
 - **Weather** — Pleasant / Cloudy / Rainy / Snowy (none checked = any)
 - **Season** — Winter / Spring / Summer / Autumn, derived from the in-game month (none = any)
-- **Region** — one or more regions from your load order (none = any)
 
 When a rule is active, the items it lists are force-equipped on matching NPCs. When the
 conditions clear the items are unequipped again, and any copies the mod added are removed —
@@ -26,8 +25,8 @@ Settings are saved to `Data/SKSE/Plugins/WeatherBehavior.json`.
 ## Performance
 
 There is no per-frame work. A background thread sleeps and, every *N* seconds (default 5,
-configurable 1–30), compares a small signature of the environment (weather class + season +
-region). Only when that signature *changes* does it run a single bounded pass over the loaded
+configurable 1–30), compares a small signature of the environment (weather class + season).
+Only when that signature *changes* does it run a single bounded pass over the loaded
 NPCs on the game thread. Idle cost is effectively zero.
 
 ## Requirements

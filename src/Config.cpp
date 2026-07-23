@@ -106,7 +106,7 @@ namespace WeatherBehavior
 		return ref;
 	}
 
-	bool Rule::EnvMatches(std::uint32_t a_weather, std::uint32_t a_season, RE::FormID a_region) const
+	bool Rule::EnvMatches(std::uint32_t a_weather, std::uint32_t a_season) const
 	{
 		if (!enabled) {
 			return false;
@@ -116,21 +116,6 @@ namespace WeatherBehavior
 		}
 		if (seasonMask != 0 && (seasonMask & a_season) == 0) {
 			return false;
-		}
-		if (!regions.empty()) {
-			if (a_region == 0) {
-				return false;
-			}
-			bool hit = false;
-			for (const auto& r : regions) {
-				if (r.ResolveID() == a_region) {
-					hit = true;
-					break;
-				}
-			}
-			if (!hit) {
-				return false;
-			}
 		}
 		return true;
 	}
@@ -180,9 +165,6 @@ namespace WeatherBehavior
 		rule.chance = std::min<std::uint32_t>(100, a_jr.value("chance", 100u));
 		rule.weatherMask = a_jr.value("weatherMask", 0u);
 		rule.seasonMask = a_jr.value("seasonMask", 0u);
-		if (a_jr.contains("regions")) {
-			rule.regions = ParseRefs(a_jr["regions"]);
-		}
 		if (a_jr.contains("excludedRaces")) {
 			rule.excludedRaces = ParseRefs(a_jr["excludedRaces"]);
 		}
@@ -202,7 +184,6 @@ namespace WeatherBehavior
 		jr["chance"] = a_rule.chance;
 		jr["weatherMask"] = a_rule.weatherMask;
 		jr["seasonMask"] = a_rule.seasonMask;
-		jr["regions"] = DumpRefs(a_rule.regions);
 		jr["excludedRaces"] = DumpRefs(a_rule.excludedRaces);
 		jr["items"] = DumpRefs(a_rule.items);
 		return jr;

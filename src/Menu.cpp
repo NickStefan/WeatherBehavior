@@ -27,7 +27,6 @@ namespace WeatherBehavior
 		constexpr int kMaxShown = 300;
 
 		char gItemSearch[128]{};
-		char gRegionSearch[128]{};
 		char gRaceSearch[128]{};
 		bool gWearableOnly{ true };
 		bool gInventoryOnly{ false };
@@ -245,11 +244,6 @@ namespace WeatherBehavior
 				}
 
 				ImGui::Spacing();
-				if (ImGui::TreeNode(std::format("Regions ({}) - none = any###regions", a_rule.regions.size()).c_str())) {
-					RenderRefList(a_rule.regions);
-					RenderRefPicker<RE::TESRegion>(a_rule.regions, gRegionSearch, sizeof(gRegionSearch), "Search regions...");
-					ImGui::TreePop();
-				}
 				if (ImGui::TreeNode(std::format("Excluded races ({})###races", a_rule.excludedRaces.size()).c_str())) {
 					RenderRefList(a_rule.excludedRaces);
 					RenderRefPicker<RE::TESRace>(a_rule.excludedRaces, gRaceSearch, sizeof(gRaceSearch), "Search races...");
@@ -278,8 +272,8 @@ namespace WeatherBehavior
 		{
 			auto& config = Config::GetSingleton();
 
-			ImGui::TextWrapped("Rules equip weather-appropriate clothing on NPCs. A rule with no weather, "
-			                   "season or region set applies always. Chance and item selection are randomized "
+			ImGui::TextWrapped("Rules equip weather-appropriate clothing on NPCs. A rule with no weather or "
+			                   "season set applies always. Chance and item selection are randomized "
 			                   "per NPC, so a crowd won't all wear the same thing.");
 			ImGui::Spacing();
 

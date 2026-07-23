@@ -41,7 +41,6 @@ namespace WeatherBehavior
 
 		std::uint32_t _lastWeather{ 0 };
 		std::uint32_t _lastSeason{ 0 };
-		RE::FormID    _lastRegion{ 0 };
 		std::uint32_t _lastRevision{ std::numeric_limits<std::uint32_t>::max() };
 
 		std::unordered_map<RE::FormID, std::unordered_map<RE::FormID, bool>> _forced;
