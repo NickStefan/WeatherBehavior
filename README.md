@@ -18,7 +18,9 @@ NPC inventories are left as they were.
 
 Everything is configured through the **SKSE Menu Framework** UI (section *Weather Behavior*).
 The item picker enumerates the wearable armor/clothing in your load order (with a search box
-and an "in my inventory only" filter) so you only ever pick real items.
+and an "in my inventory only" filter) so you only ever pick real items. Clothing is tracked
+solely by its **Editor ID**, so presets stay readable and portable across load orders. Only
+items that expose an Editor ID at runtime are listed.
 
 Settings are saved to `Data/SKSE/Plugins/WeatherBehavior.json`.
 
@@ -34,6 +36,9 @@ NPCs on the game thread. Idle cost is effectively zero.
 - SKSE64 (SE/AE) or SKSEVR — the plugin is built multi-runtime.
 - [SKSE Menu Framework](https://www.nexusmods.com/skyrimspecialedition/mods/120352) (for the config UI).
 - Address Library for SKSE Plugins.
+- [powerofthree's Tweaks](https://www.nexusmods.com/skyrimspecialedition/mods/51073) — the base
+  game does not keep Editor IDs in memory for armor; this restores them so clothing can be picked
+  and resolved by Editor ID.
 
 ## Building
 

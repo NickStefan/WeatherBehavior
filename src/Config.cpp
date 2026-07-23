@@ -1,6 +1,5 @@
 #include "Config.h"
 
-#include <charconv>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -43,30 +42,6 @@ namespace WeatherBehavior
 		std::filesystem::path PresetsFolder() { return PluginFolder() / L"WeatherBehavior"; }
 	}
 
-	RE::TESObjectARMO* FormRef::Resolve() const
-	{
-		if (!Valid()) {
-			return nullptr;
-		}
-		const auto handler = RE::TESDataHandler::GetSingleton();
-		return handler ? handler->LookupForm<RE::TESObjectARMO>(localID, plugin) : nullptr;
-	}
-
-	RE::FormID FormRef::ResolveID() const
-	{
-		if (!Valid()) {
-			return 0;
-		}
-		const auto handler = RE::TESDataHandler::GetSingleton();
-		const auto form = handler ? handler->LookupForm(localID, plugin) : nullptr;
-		return form ? form->GetFormID() : 0;
-	}
-
-	std::string FormRef::Serialize() const
-	{
-		return std::format("{}|{:X}", plugin, localID);
-	}
-
 	std::uint32_t MakeRuleID()
 	{
 		static std::mt19937 rng{ std::random_device{}() };
@@ -75,35 +50,6 @@ namespace WeatherBehavior
 			id = rng();
 		}
 		return id;
-	}
-
-	std::optional<FormRef> FormRef::Parse(std::string_view a_text)
-	{
-		const auto bar = a_text.find('|');
-		if (bar == std::string_view::npos) {
-			return std::nullopt;
-		}
-		FormRef ref;
-		ref.plugin = std::string(a_text.substr(0, bar));
-		auto idText = a_text.substr(bar + 1);
-		auto [ptr, ec] = std::from_chars(idText.data(), idText.data() + idText.size(), ref.localID, 16);
-		if (ec != std::errc{} || ref.plugin.empty()) {
-			return std::nullopt;
-		}
-		return ref;
-	}
-
-	FormRef FormRef::From(const RE::TESForm* a_form)
-	{
-		FormRef ref;
-		if (!a_form) {
-			return ref;
-		}
-		if (const auto file = a_form->GetFile(0)) {
-			ref.plugin = std::string(file->GetFilename());
-		}
-		ref.localID = a_form->GetLocalFormID();
-		return ref;
 	}
 
 	bool Rule::EnvMatches(std::uint32_t a_weather, std::uint32_t a_season) const
@@ -126,29 +72,21 @@ namespace WeatherBehavior
 		return instance;
 	}
 
-	static std::vector<FormRef> ParseRefs(const json& a_array)
+	static std::vector<std::string> ParseStrings(const json& a_array)
 	{
-		std::vector<FormRef> out;
+		std::vector<std::string> out;
 		if (!a_array.is_array()) {
 			return out;
 		}
 		for (const auto& entry : a_array) {
 			if (entry.is_string()) {
-				if (auto ref = FormRef::Parse(entry.get<std::string>())) {
-					out.push_back(*ref);
+				auto s = entry.get<std::string>();
+				if (!s.empty()) {
+					out.push_back(std::move(s));
 				}
 			}
 		}
 		return out;
-	}
-
-	static json DumpRefs(const std::vector<FormRef>& a_refs)
-	{
-		json arr = json::array();
-		for (const auto& r : a_refs) {
-			arr.push_back(r.Serialize());
-		}
-		return arr;
 	}
 
 	static Rule RuleFromJson(const json& a_jr, std::string_view a_preset)
@@ -166,7 +104,7 @@ namespace WeatherBehavior
 		rule.weatherMask = a_jr.value("weatherMask", 0u);
 		rule.seasonMask = a_jr.value("seasonMask", 0u);
 		if (a_jr.contains("items")) {
-			rule.items = ParseRefs(a_jr["items"]);
+			rule.items = ParseStrings(a_jr["items"]);
 		}
 		return rule;
 	}
@@ -181,7 +119,7 @@ namespace WeatherBehavior
 		jr["chance"] = a_rule.chance;
 		jr["weatherMask"] = a_rule.weatherMask;
 		jr["seasonMask"] = a_rule.seasonMask;
-		jr["items"] = DumpRefs(a_rule.items);
+		jr["items"] = a_rule.items;
 		return jr;
 	}
 

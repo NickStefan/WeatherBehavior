@@ -69,14 +69,13 @@ namespace WeatherBehavior
 			}
 		}
 
-		bool ContainsRef(const std::vector<FormRef>& a_list, const FormRef& a_ref)
+		bool ContainsString(const std::vector<std::string>& a_list, std::string_view a_value)
 		{
-			return std::find(a_list.begin(), a_list.end(), a_ref) != a_list.end();
+			return std::find(a_list.begin(), a_list.end(), a_value) != a_list.end();
 		}
 
-		void RenderRefList(std::vector<FormRef>& a_list)
+		void RenderItemList(std::vector<std::string>& a_list)
 		{
-			const auto handler = RE::TESDataHandler::GetSingleton();
 			for (int i = 0; i < static_cast<int>(a_list.size()); ++i) {
 				ImGui::PushID(i);
 				if (ImGui::SmallButton("X")) {
@@ -86,14 +85,16 @@ namespace WeatherBehavior
 				}
 				ImGui::PopID();
 				ImGui::SameLine();
-				const auto form = (a_list[i].Valid() && handler) ?
-				                      handler->LookupForm(a_list[i].localID, a_list[i].plugin) :
-				                      nullptr;
-				ImGui::TextUnformatted(form ? DisplayName(form).c_str() : a_list[i].Serialize().c_str());
+				const auto form = RE::TESForm::LookupByEditorID<RE::TESObjectARMO>(a_list[i]);
+				if (form) {
+					ImGui::Text("%s  [%s]", a_list[i].c_str(), DisplayName(form).c_str());
+				} else {
+					ImGui::TextUnformatted(a_list[i].c_str());
+				}
 			}
 		}
 
-		void RenderItemPicker(std::vector<FormRef>& a_items)
+		void RenderItemPicker(std::vector<std::string>& a_items)
 		{
 			ImGui::Checkbox("Player inventory only", &gInventoryOnly);
 			ImGui::InputTextWithHint("##itemsearch", "Search clothing/armor...", gItemSearch, sizeof(gItemSearch));
@@ -128,8 +129,13 @@ namespace WeatherBehavior
 					if (gInventoryOnly && !playerItems.contains(armor->GetFormID())) {
 						continue;
 					}
+					const auto edid = armor->GetFormEditorID();
+					if (!edid || !edid[0]) {
+						continue;
+					}
 					const std::string name = DisplayName(armor);
-					if (!needle.empty() && ToLower(name).find(needle) == std::string::npos) {
+					if (!needle.empty() && ToLower(name).find(needle) == std::string::npos &&
+						ToLower(edid).find(needle) == std::string::npos) {
 						continue;
 					}
 					if (shown++ >= kMaxShown) {
@@ -137,18 +143,17 @@ namespace WeatherBehavior
 						break;
 					}
 
-					const FormRef ref = FormRef::From(armor);
 					ImGui::PushID(static_cast<int>(armor->GetFormID()));
-					if (ContainsRef(a_items, ref)) {
+					if (ContainsString(a_items, edid)) {
 						ImGui::BeginDisabled();
 						ImGui::SmallButton("Added");
 						ImGui::EndDisabled();
 					} else if (ImGui::SmallButton("Add")) {
-						a_items.push_back(ref);
+						a_items.emplace_back(edid);
 					}
 					ImGui::PopID();
 					ImGui::SameLine();
-					ImGui::TextUnformatted(name.c_str());
+					ImGui::Text("%s  [%s]", name.c_str(), edid);
 				}
 			}
 			ImGui::EndChild();
@@ -197,7 +202,7 @@ namespace WeatherBehavior
 
 				ImGui::Spacing();
 				if (ImGui::TreeNode(std::format("Items to equip ({})###items", a_rule.items.size()).c_str())) {
-					RenderRefList(a_rule.items);
+					RenderItemList(a_rule.items);
 					RenderItemPicker(a_rule.items);
 					ImGui::TreePop();
 				}

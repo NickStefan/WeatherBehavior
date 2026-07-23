@@ -125,8 +125,8 @@ namespace WeatherBehavior
 
 		std::vector<RE::FormID> pool;
 		pool.reserve(a_rule.items.size());
-		for (const auto& ref : a_rule.items) {
-			if (const auto armor = ref.Resolve()) {
+		for (const auto& edid : a_rule.items) {
+			if (const auto armor = RE::TESForm::LookupByEditorID<RE::TESObjectARMO>(edid)) {
 				pool.push_back(armor->GetFormID());
 			}
 		}
