@@ -12,9 +12,14 @@ under conditions you pick:
 - **Weather** — Pleasant / Cloudy / Rainy / Snowy (none checked = any)
 - **Season** — Winter / Spring / Summer / Autumn, derived from the in-game month (none = any)
 
-When a rule is active, the items it lists are force-equipped on matching NPCs. When the
-conditions clear the items are unequipped again, and any copies the mod added are removed —
-NPC inventories are left as they were.
+When a rule is active, one item from its list is picked at random per NPC (the pick is
+deterministic per NPC, so it stays stable and a crowd shows variety). When the conditions
+clear the items are unequipped again, and any copies the mod added are removed — NPC
+inventories are left as they were.
+
+The mod only fills free equipment slots. NPCs whose own clothing already covers a slot —
+a hooded mage robe, a guard helmet — are left alone; their gear is never displaced. Only
+humanoid NPCs are touched: creatures, children, and dead or disabled actors are skipped.
 
 Everything is configured through the **SKSE Menu Framework** UI (section *Weather Behavior*).
 The item picker enumerates the wearable armor/clothing in your load order (with a search box
@@ -27,9 +32,9 @@ Settings are saved to `Data/SKSE/Plugins/WeatherBehavior.json`.
 ## Performance
 
 There is no per-frame work. A background thread sleeps and, every *N* seconds (default 5,
-configurable 1–30), compares a small signature of the environment (weather class + season).
-Only when that signature *changes* does it run a single bounded pass over the loaded
-NPCs on the game thread. Idle cost is effectively zero.
+`pollSeconds` in the settings file), schedules a single bounded pass over the loaded NPCs
+on the game thread. With no active rules the pass returns immediately, and per NPC nothing
+is touched unless something actually needs to change. Idle cost is effectively zero.
 
 ## Requirements
 
@@ -57,4 +62,4 @@ folder automatically.
 ## Install
 
 Copy `WeatherBehavior.dll` to `Data/SKSE/Plugins/`. Open the SKSE Menu Framework menu in game,
-go to *Weather Behavior → Configuration*, add a rule, pick your items, and press **Save & Apply**.
+go to *Weather Behavior → Configuration*, add a rule, pick your items, and press **Save**.

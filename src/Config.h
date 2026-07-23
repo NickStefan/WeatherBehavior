@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -30,10 +31,12 @@ namespace WeatherBehavior
 	public:
 		static Config& GetSingleton();
 
-		bool                       enabled{ true };
-		bool                       onlyOutdoors{ true };
+		std::atomic<bool>          enabled{ true };
+		std::atomic<bool>          onlyOutdoors{ true };
 		std::atomic<std::uint32_t> pollSeconds{ 5 };
-		std::vector<Rule>          rules;
+
+		std::mutex        rulesMutex;
+		std::vector<Rule> rules;
 
 		void Load();
 		void Save();
@@ -41,12 +44,7 @@ namespace WeatherBehavior
 		static std::string SanitizeFileName(std::string_view a_name);
 		static std::string PresetsLocation();
 
-		[[nodiscard]] std::uint32_t Revision() const { return _revision.load(); }
-		void                        Bump() { _revision.fetch_add(1); }
-
 	private:
 		Config() = default;
-
-		std::atomic<std::uint32_t> _revision{ 0 };
 	};
 }

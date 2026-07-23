@@ -1,7 +1,6 @@
 #include "Manager.h"
 
 #include <chrono>
-#include <limits>
 #include <random>
 #include <unordered_set>
 #include <vector>
@@ -15,6 +14,11 @@ namespace WeatherBehavior
 	{
 		static Manager instance;
 		return instance;
+	}
+
+	Manager::~Manager()
+	{
+		Stop();
 	}
 
 	void Manager::Start()
@@ -42,13 +46,6 @@ namespace WeatherBehavior
 		_sleepCv.notify_all();
 	}
 
-	void Manager::ResetTracking()
-	{
-		_lastRevision = std::numeric_limits<std::uint32_t>::max();
-		_lastWeather = 0;
-		_lastSeason = 0;
-	}
-
 	void Manager::PollLoop()
 	{
 		while (_running.load()) {
@@ -68,77 +65,33 @@ namespace WeatherBehavior
 
 	void Manager::Tick()
 	{
-		auto& config = Config::GetSingleton();
-
-		if (!config.enabled) {
+		if (!Config::GetSingleton().enabled.load(std::memory_order_relaxed)) {
 			if (!_forced.empty()) {
 				RevertAll();
 			}
-			_lastRevision = std::numeric_limits<std::uint32_t>::max();
 			return;
 		}
-
-		const auto sky = RE::Sky::GetSingleton();
-		const auto calendar = RE::Calendar::GetSingleton();
-		if (!sky || !calendar) {
-			return;
-		}
-
-		const std::uint32_t weather = WeatherClassOf(sky->currentWeather);
-		const std::uint32_t season = SeasonBitOf(calendar->GetMonth());
-		const std::uint32_t revision = config.Revision();
-
-		if (weather == _lastWeather && season == _lastSeason && revision == _lastRevision) {
-			return;
-		}
-
-		_lastWeather = weather;
-		_lastSeason = season;
-		_lastRevision = revision;
-
 		Apply();
 	}
 
-	static bool EnsureHasItem(RE::Actor* a_actor, RE::TESObjectARMO* a_item)
+	namespace
 	{
-		const auto counts = a_actor->GetInventoryCounts();
-		for (const auto& [obj, count] : counts) {
-			if (obj == a_item && count > 0) {
+		struct ActiveRule
+		{
+			std::uint32_t           id{ 0 };
+			Target                  target{ Target::kAllNPCs };
+			std::uint32_t           chance{ 100 };
+			std::vector<RE::FormID> pool;
+		};
+
+		bool IsEligible(const RE::Actor* a_actor, const RE::PlayerCharacter* a_player)
+		{
+			if (!a_actor || a_actor == a_player || a_actor->IsDead() || a_actor->IsDisabled() ||
+				a_actor->IsChild()) {
 				return false;
 			}
-		}
-		a_actor->AddObjectToContainer(a_item, nullptr, 1, nullptr);
-		return true;
-	}
-
-	static void SelectItems(const Rule& a_rule, RE::FormID a_actorID, std::unordered_set<RE::FormID>& a_out)
-	{
-		if (a_rule.items.empty()) {
-			return;
-		}
-
-		std::mt19937 rng(a_actorID * 2654435761u ^ (a_rule.id * 40503u));
-
-		if (a_rule.chance < 100 && (rng() % 100u) >= a_rule.chance) {
-			return;
-		}
-
-		std::vector<RE::FormID> pool;
-		pool.reserve(a_rule.items.size());
-		for (const auto& edid : a_rule.items) {
-			if (const auto armor = RE::TESForm::LookupByEditorID<RE::TESObjectARMO>(edid)) {
-				pool.push_back(armor->GetFormID());
-			}
-		}
-		if (pool.empty()) {
-			return;
-		}
-
-		const std::size_t count = 1 + (rng() % pool.size());
-		for (std::size_t i = 0; i < count; ++i) {
-			const std::size_t j = i + (rng() % (pool.size() - i));
-			std::swap(pool[i], pool[j]);
-			a_out.insert(pool[i]);
+			const auto race = a_actor->GetRace();
+			return race && race->HasKeywordString("ActorTypeNPC");
 		}
 	}
 
@@ -147,70 +100,137 @@ namespace WeatherBehavior
 		auto& config = Config::GetSingleton();
 		const auto processLists = RE::ProcessLists::GetSingleton();
 		const auto equipManager = RE::ActorEquipManager::GetSingleton();
+		const auto sky = RE::Sky::GetSingleton();
+		const auto calendar = RE::Calendar::GetSingleton();
 		const auto player = RE::PlayerCharacter::GetSingleton();
-		if (!processLists || !equipManager) {
+		if (!processLists || !equipManager || !sky || !calendar) {
 			return;
 		}
 
-		const std::uint32_t weather = _lastWeather;
-		const std::uint32_t season = _lastSeason;
+		const std::uint32_t weather = WeatherClassOf(sky->currentWeather);
+		const std::uint32_t season = SeasonBitOf(calendar->GetMonth());
+		const bool onlyOutdoors = config.onlyOutdoors.load(std::memory_order_relaxed);
 
-		std::vector<const Rule*> active;
-		for (const auto& rule : config.rules) {
-			if (rule.EnvMatches(weather, season)) {
-				active.push_back(&rule);
+		std::vector<ActiveRule> active;
+		{
+			std::scoped_lock lock(config.rulesMutex);
+			for (const auto& rule : config.rules) {
+				if (!rule.EnvMatches(weather, season) || rule.items.empty()) {
+					continue;
+				}
+				ActiveRule ar{ rule.id, rule.target, rule.chance, {} };
+				ar.pool.reserve(rule.items.size());
+				for (const auto& edid : rule.items) {
+					if (const auto armor = RE::TESForm::LookupByEditorID<RE::TESObjectARMO>(edid)) {
+						ar.pool.push_back(armor->GetFormID());
+					}
+				}
+				if (!ar.pool.empty()) {
+					active.push_back(std::move(ar));
+				}
 			}
 		}
 
+		if (active.empty() && _forced.empty()) {
+			return;
+		}
+
 		processLists->ForEachHighActor([&](RE::Actor* a_actor) {
-			if (!a_actor || a_actor == player || a_actor->IsDead() || a_actor->IsDisabled() ||
-				!a_actor->GetActorBase()) {
+			if (!IsEligible(a_actor, player)) {
 				return RE::BSContainer::ForEachResult::kContinue;
 			}
 
-			const bool isFollower = a_actor->IsPlayerTeammate();
-			const bool indoors = config.onlyOutdoors && a_actor->GetParentCell() &&
-			                     a_actor->GetParentCell()->IsInteriorCell();
 			const RE::FormID actorID = a_actor->GetFormID();
+			const bool isFollower = a_actor->IsPlayerTeammate();
+			const auto cell = a_actor->GetParentCell();
+			const bool indoors = onlyOutdoors && cell && cell->IsInteriorCell();
 
 			std::unordered_set<RE::FormID> desired;
 			if (!indoors) {
-				for (const auto rule : active) {
-					if (rule->target == Target::kFollowersOnly && !isFollower) {
+				for (const auto& rule : active) {
+					if (rule.target == Target::kFollowersOnly && !isFollower) {
 						continue;
 					}
-					SelectItems(*rule, actorID, desired);
-				}
-			}
-
-			auto& worn = _forced[actorID];
-
-			for (auto it = worn.begin(); it != worn.end();) {
-				if (!desired.contains(it->first)) {
-					if (const auto armor = RE::TESForm::LookupByID<RE::TESObjectARMO>(it->first)) {
-						equipManager->UnequipObject(a_actor, armor, nullptr, 1, nullptr, true, true, false, false);
-						if (it->second) {
-							a_actor->RemoveItem(armor, 1, RE::ITEM_REMOVE_REASON::kRemove, nullptr, nullptr);
-						}
+					std::mt19937 rng(actorID * 2654435761u ^ (rule.id * 40503u));
+					if (rule.chance < 100 && (rng() % 100u) >= rule.chance) {
+						continue;
 					}
-					it = worn.erase(it);
-				} else {
-					++it;
+					desired.insert(rule.pool[rng() % rule.pool.size()]);
 				}
 			}
 
+			const auto forcedIt = _forced.find(actorID);
+			auto*      worn = forcedIt != _forced.end() ? &forcedIt->second : nullptr;
+			if (!worn && desired.empty()) {
+				return RE::BSContainer::ForEachResult::kContinue;
+			}
+
+			std::unordered_set<RE::FormID> removing;
+			if (worn) {
+				for (auto it = worn->begin(); it != worn->end();) {
+					if (!desired.contains(it->first)) {
+						if (const auto armor = RE::TESForm::LookupByID<RE::TESObjectARMO>(it->first)) {
+							equipManager->UnequipObject(a_actor, armor, nullptr, 1, nullptr, true, true, false, false);
+							if (it->second) {
+								a_actor->RemoveItem(armor, 1, RE::ITEM_REMOVE_REASON::kRemove, nullptr, nullptr);
+							}
+						}
+						removing.insert(it->first);
+						it = worn->erase(it);
+					} else {
+						++it;
+					}
+				}
+			}
+
+			std::vector<RE::TESObjectARMO*> toAdd;
 			for (const auto id : desired) {
-				if (worn.contains(id)) {
+				if (worn && worn->contains(id)) {
 					continue;
 				}
 				if (const auto armor = RE::TESForm::LookupByID<RE::TESObjectARMO>(id)) {
-					const bool added = EnsureHasItem(a_actor, armor);
-					equipManager->EquipObject(a_actor, armor, nullptr, 1, nullptr, true, true, false, false);
-					worn[id] = added;
+					toAdd.push_back(armor);
 				}
 			}
 
-			if (worn.empty()) {
+			if (!toAdd.empty()) {
+				std::uint32_t                  occupied = 0;
+				std::unordered_set<RE::FormID> owned;
+				const auto inventory = a_actor->GetInventory([](RE::TESBoundObject& a_obj) { return a_obj.IsArmor(); });
+				for (const auto& [obj, data] : inventory) {
+					if (!obj || data.first <= 0) {
+						continue;
+					}
+					const auto id = obj->GetFormID();
+					owned.insert(id);
+					if (data.second && data.second->IsWorn() && !removing.contains(id) &&
+						!(worn && worn->contains(id))) {
+						if (const auto wornArmor = obj->As<RE::TESObjectARMO>()) {
+							occupied |= static_cast<std::uint32_t>(wornArmor->GetSlotMask());
+						}
+					}
+				}
+
+				for (const auto armor : toAdd) {
+					const auto mask = static_cast<std::uint32_t>(armor->GetSlotMask());
+					if ((mask & occupied) != 0) {
+						continue;
+					}
+					const auto id = armor->GetFormID();
+					const bool added = !owned.contains(id);
+					if (added) {
+						a_actor->AddObjectToContainer(armor, nullptr, 1, nullptr);
+					}
+					equipManager->EquipObject(a_actor, armor, nullptr, 1, nullptr, true, true, false, false);
+					if (!worn) {
+						worn = &_forced[actorID];
+					}
+					(*worn)[id] = added;
+					occupied |= mask;
+				}
+			}
+
+			if (worn && worn->empty()) {
 				_forced.erase(actorID);
 			}
 
@@ -222,16 +242,16 @@ namespace WeatherBehavior
 	{
 		const auto equipManager = RE::ActorEquipManager::GetSingleton();
 		if (!equipManager) {
-			_forced.clear();
 			return;
 		}
 
-		for (const auto& [actorID, worn] : _forced) {
-			const auto actor = RE::TESForm::LookupByID<RE::Actor>(actorID);
+		for (auto it = _forced.begin(); it != _forced.end();) {
+			const auto actor = RE::TESForm::LookupByID<RE::Actor>(it->first);
 			if (!actor) {
+				++it;
 				continue;
 			}
-			for (const auto& [itemID, addedCopy] : worn) {
+			for (const auto& [itemID, addedCopy] : it->second) {
 				if (const auto armor = RE::TESForm::LookupByID<RE::TESObjectARMO>(itemID)) {
 					equipManager->UnequipObject(actor, armor, nullptr, 1, nullptr, true, true, false, false);
 					if (addedCopy) {
@@ -239,8 +259,8 @@ namespace WeatherBehavior
 					}
 				}
 			}
+			it = _forced.erase(it);
 		}
-		_forced.clear();
 	}
 
 	namespace
@@ -297,12 +317,15 @@ namespace WeatherBehavior
 				continue;
 			}
 			std::uint32_t actorCount = 0;
-			a_intfc->ReadRecordData(actorCount);
+			if (!a_intfc->ReadRecordData(actorCount)) {
+				return;
+			}
 			for (std::uint32_t i = 0; i < actorCount; ++i) {
-				RE::FormID actorID = 0;
-				a_intfc->ReadRecordData(actorID);
+				RE::FormID    actorID = 0;
 				std::uint32_t itemCount = 0;
-				a_intfc->ReadRecordData(itemCount);
+				if (!a_intfc->ReadRecordData(actorID) || !a_intfc->ReadRecordData(itemCount)) {
+					return;
+				}
 
 				RE::FormID newActorID = 0;
 				const bool actorOk = a_intfc->ResolveFormID(actorID, newActorID);
@@ -311,8 +334,9 @@ namespace WeatherBehavior
 				for (std::uint32_t j = 0; j < itemCount; ++j) {
 					RE::FormID   itemID = 0;
 					std::uint8_t flag = 0;
-					a_intfc->ReadRecordData(itemID);
-					a_intfc->ReadRecordData(flag);
+					if (!a_intfc->ReadRecordData(itemID) || !a_intfc->ReadRecordData(flag)) {
+						return;
+					}
 
 					RE::FormID newItemID = 0;
 					if (actorOk && a_intfc->ResolveFormID(itemID, newItemID)) {
@@ -330,6 +354,5 @@ namespace WeatherBehavior
 	void Manager::RevertState()
 	{
 		_forced.clear();
-		ResetTracking();
 	}
 }

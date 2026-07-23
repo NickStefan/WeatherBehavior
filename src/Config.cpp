@@ -1,5 +1,6 @@
 #include "Config.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -156,6 +157,8 @@ namespace WeatherBehavior
 
 	void Config::Load()
 	{
+		std::scoped_lock lock(rulesMutex);
+
 		rules.clear();
 		std::unordered_set<std::uint32_t> seen;
 
@@ -164,9 +167,9 @@ namespace WeatherBehavior
 			try {
 				json root;
 				file >> root;
-				enabled = root.value("enabled", true);
-				onlyOutdoors = root.value("onlyOutdoors", true);
-				pollSeconds.store(std::max<std::uint32_t>(1, root.value("pollSeconds", 5u)), std::memory_order_relaxed);
+				enabled.store(root.value("enabled", true), std::memory_order_relaxed);
+				onlyOutdoors.store(root.value("onlyOutdoors", true), std::memory_order_relaxed);
+				pollSeconds.store(std::clamp<std::uint32_t>(root.value("pollSeconds", 5u), 1, 600), std::memory_order_relaxed);
 
 				if (root.contains("rules") && root["rules"].is_array()) {
 					for (const auto& jr : root["rules"]) {
@@ -226,14 +229,15 @@ namespace WeatherBehavior
 		}
 
 		SKSE::log::info("Loaded {} rule(s)", rules.size());
-		Bump();
 	}
 
 	void Config::Save()
 	{
+		std::scoped_lock lock(rulesMutex);
+
 		json root;
-		root["enabled"] = enabled;
-		root["onlyOutdoors"] = onlyOutdoors;
+		root["enabled"] = enabled.load(std::memory_order_relaxed);
+		root["onlyOutdoors"] = onlyOutdoors.load(std::memory_order_relaxed);
 		root["pollSeconds"] = pollSeconds.load(std::memory_order_relaxed);
 		std::ofstream mainFile(SettingsPath());
 		if (mainFile.good()) {

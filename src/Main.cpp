@@ -35,7 +35,6 @@ namespace
 			break;
 		case SKSE::MessagingInterface::kPostLoadGame:
 		case SKSE::MessagingInterface::kNewGame:
-			Manager::GetSingleton().ResetTracking();
 			Manager::GetSingleton().RequestApply();
 			break;
 		default:
