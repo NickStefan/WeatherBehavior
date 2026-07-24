@@ -9,9 +9,10 @@
 
 namespace WeatherBehavior
 {
+	std::uint32_t NextRuleUID();
+
 	struct Rule
 	{
-		std::uint32_t            id{ 0 };
 		std::string              name{ "New Rule" };
 		std::string              preset{ "Default" };
 		bool                     enabled{ true };
@@ -20,11 +21,11 @@ namespace WeatherBehavior
 		std::uint32_t            weatherMask{ 0 };
 		std::uint32_t            seasonMask{ 0 };
 		std::vector<std::string> items;
+		std::uint32_t            uid{ NextRuleUID() };  // runtime only, never saved
 
-		[[nodiscard]] bool EnvMatches(std::uint32_t a_weather, std::uint32_t a_season) const;
+		[[nodiscard]] bool          EnvMatches(std::uint32_t a_weather, std::uint32_t a_season) const;
+		[[nodiscard]] std::uint32_t Seed() const;
 	};
-
-	std::uint32_t MakeRuleID();
 
 	class Config
 	{

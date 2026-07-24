@@ -1,10 +1,10 @@
 #include "Config.h"
 
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <map>
-#include <random>
 #include <unordered_set>
 
 #include <Windows.h>
@@ -13,7 +13,7 @@
 
 namespace WeatherBehavior
 {
-	using json = nlohmann::json;
+	using json = nlohmann::ordered_json;
 
 	namespace
 	{
@@ -43,14 +43,19 @@ namespace WeatherBehavior
 		std::filesystem::path PresetsFolder() { return PluginFolder() / L"WeatherBehavior"; }
 	}
 
-	std::uint32_t MakeRuleID()
+	std::uint32_t NextRuleUID()
 	{
-		static std::mt19937 rng{ std::random_device{}() };
-		std::uint32_t id = 0;
-		while (id == 0) {
-			id = rng();
+		static std::atomic<std::uint32_t> counter{ 0 };
+		return ++counter;
+	}
+
+	std::uint32_t Rule::Seed() const
+	{
+		std::uint32_t hash = 2166136261u;
+		for (const char c : preset + '/' + name) {
+			hash = (hash ^ static_cast<std::uint8_t>(c)) * 16777619u;
 		}
-		return id;
+		return hash;
 	}
 
 	bool Rule::EnvMatches(std::uint32_t a_weather, std::uint32_t a_season) const
@@ -73,39 +78,69 @@ namespace WeatherBehavior
 		return instance;
 	}
 
-	static std::vector<std::string> ParseStrings(const json& a_array)
+	static bool EqualsNoCase(std::string_view a_lhs, std::string_view a_rhs)
 	{
-		std::vector<std::string> out;
-		if (!a_array.is_array()) {
-			return out;
-		}
-		for (const auto& entry : a_array) {
-			if (entry.is_string()) {
-				auto s = entry.get<std::string>();
-				if (!s.empty()) {
-					out.push_back(std::move(s));
-				}
+		return a_lhs.size() == a_rhs.size() &&
+		       std::equal(a_lhs.begin(), a_lhs.end(), a_rhs.begin(), [](char a, char b) {
+			       return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
+		       });
+	}
+
+	template <class T>
+	static json NamesFromMask(std::uint32_t a_mask, const T& a_names)
+	{
+		json out = json::array();
+		for (std::uint32_t i = 0; i < a_names.size(); ++i) {
+			if (a_mask & (1u << i)) {
+				out.push_back(a_names[i]);
 			}
 		}
 		return out;
 	}
 
+	template <class T>
+	static std::uint32_t MaskFromNames(const json& a_array, const T& a_names)
+	{
+		std::uint32_t mask = 0;
+		if (!a_array.is_array()) {
+			return mask;
+		}
+		for (const auto& entry : a_array) {
+			if (!entry.is_string()) {
+				continue;
+			}
+			const auto text = entry.get<std::string>();
+			for (std::uint32_t i = 0; i < a_names.size(); ++i) {
+				if (EqualsNoCase(text, a_names[i])) {
+					mask |= 1u << i;
+				}
+			}
+		}
+		return mask;
+	}
+
 	static Rule RuleFromJson(const json& a_jr, std::string_view a_preset)
 	{
 		Rule rule;
-		rule.id = a_jr.value("id", 0u);
-		if (rule.id == 0) {
-			rule.id = MakeRuleID();
-		}
 		rule.name = a_jr.value("name", std::string{ "Rule" });
 		rule.preset = std::string(a_preset);
 		rule.enabled = a_jr.value("enabled", true);
-		rule.target = static_cast<Target>(a_jr.value("target", 0u));
+		rule.target = EqualsNoCase(a_jr.value("appliesTo", std::string{ "everyone" }), "followers") ?
+		                  Target::kFollowersOnly :
+		                  Target::kAllNPCs;
 		rule.chance = std::min<std::uint32_t>(100, a_jr.value("chance", 100u));
-		rule.weatherMask = a_jr.value("weatherMask", 0u);
-		rule.seasonMask = a_jr.value("seasonMask", 0u);
-		if (a_jr.contains("items")) {
-			rule.items = ParseStrings(a_jr["items"]);
+		if (a_jr.contains("weather")) {
+			rule.weatherMask = MaskFromNames(a_jr["weather"], kWeatherNames);
+		}
+		if (a_jr.contains("seasons")) {
+			rule.seasonMask = MaskFromNames(a_jr["seasons"], kSeasonNames);
+		}
+		if (a_jr.contains("items") && a_jr["items"].is_array()) {
+			for (const auto& entry : a_jr["items"]) {
+				if (entry.is_string() && !entry.get<std::string>().empty()) {
+					rule.items.push_back(entry.get<std::string>());
+				}
+			}
 		}
 		return rule;
 	}
@@ -113,13 +148,12 @@ namespace WeatherBehavior
 	static json RuleToJson(const Rule& a_rule)
 	{
 		json jr;
-		jr["id"] = a_rule.id;
 		jr["name"] = a_rule.name;
 		jr["enabled"] = a_rule.enabled;
-		jr["target"] = static_cast<std::uint32_t>(a_rule.target);
+		jr["appliesTo"] = a_rule.target == Target::kFollowersOnly ? "followers" : "everyone";
 		jr["chance"] = a_rule.chance;
-		jr["weatherMask"] = a_rule.weatherMask;
-		jr["seasonMask"] = a_rule.seasonMask;
+		jr["weather"] = NamesFromMask(a_rule.weatherMask, kWeatherNames);
+		jr["seasons"] = NamesFromMask(a_rule.seasonMask, kSeasonNames);
 		jr["items"] = a_rule.items;
 		return jr;
 	}
@@ -160,7 +194,6 @@ namespace WeatherBehavior
 		std::scoped_lock lock(rulesMutex);
 
 		rules.clear();
-		std::unordered_set<std::uint32_t> seen;
 
 		std::ifstream file(SettingsPath());
 		if (file.good()) {
@@ -170,15 +203,6 @@ namespace WeatherBehavior
 				enabled.store(root.value("enabled", true), std::memory_order_relaxed);
 				onlyOutdoors.store(root.value("onlyOutdoors", true), std::memory_order_relaxed);
 				pollSeconds.store(std::clamp<std::uint32_t>(root.value("pollSeconds", 5u), 1, 600), std::memory_order_relaxed);
-
-				if (root.contains("rules") && root["rules"].is_array()) {
-					for (const auto& jr : root["rules"]) {
-						Rule rule = RuleFromJson(jr, jr.value("preset", std::string{ "Default" }));
-						if (seen.insert(rule.id).second) {
-							rules.push_back(std::move(rule));
-						}
-					}
-				}
 			} catch (const std::exception& e) {
 				SKSE::log::error("Failed to parse settings: {}", e.what());
 			}
@@ -214,10 +238,7 @@ namespace WeatherBehavior
 
 						const std::string preset = entry.path().stem().string();
 						for (const auto& jr : *jrules) {
-							Rule rule = RuleFromJson(jr, preset);
-							if (seen.insert(rule.id).second) {
-								rules.push_back(std::move(rule));
-							}
+							rules.push_back(RuleFromJson(jr, preset));
 						}
 					} catch (const std::exception& e) {
 						SKSE::log::error("Failed to load preset {}: {}", entry.path().filename().string(), e.what());

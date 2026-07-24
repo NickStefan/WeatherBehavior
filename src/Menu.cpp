@@ -176,7 +176,7 @@ namespace WeatherBehavior
 
 		void RenderRule(Rule& a_rule, bool& a_deleteRequested)
 		{
-			ImGui::PushID(static_cast<int>(a_rule.id));
+			ImGui::PushID(static_cast<int>(a_rule.uid));
 
 			const std::string header =
 				std::format("{}###rulehdr", a_rule.name.empty() ? "(unnamed)" : a_rule.name);
@@ -269,9 +269,7 @@ namespace WeatherBehavior
 			std::scoped_lock lock(config.rulesMutex);
 
 			if (ImGui::Button("+ Add rule")) {
-				Rule rule;
-				rule.id = MakeRuleID();
-				config.rules.push_back(std::move(rule));
+				config.rules.emplace_back();
 			}
 			ImGui::Spacing();
 

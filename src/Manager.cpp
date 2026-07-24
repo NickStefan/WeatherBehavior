@@ -78,7 +78,7 @@ namespace WeatherBehavior
 	{
 		struct ActiveRule
 		{
-			std::uint32_t           id{ 0 };
+			std::uint32_t           seed{ 0 };
 			Target                  target{ Target::kAllNPCs };
 			std::uint32_t           chance{ 100 };
 			std::vector<RE::FormID> pool;
@@ -118,7 +118,7 @@ namespace WeatherBehavior
 				if (!rule.EnvMatches(weather, season) || rule.items.empty()) {
 					continue;
 				}
-				ActiveRule ar{ rule.id, rule.target, rule.chance, {} };
+				ActiveRule ar{ rule.Seed(), rule.target, rule.chance, {} };
 				ar.pool.reserve(rule.items.size());
 				for (const auto& edid : rule.items) {
 					if (const auto armor = RE::TESForm::LookupByEditorID<RE::TESObjectARMO>(edid)) {
@@ -151,7 +151,7 @@ namespace WeatherBehavior
 					if (rule.target == Target::kFollowersOnly && !isFollower) {
 						continue;
 					}
-					std::mt19937 rng(actorID * 2654435761u ^ (rule.id * 40503u));
+					std::mt19937 rng(actorID * 2654435761u ^ (rule.seed * 40503u));
 					if (rule.chance < 100 && (rng() % 100u) >= rule.chance) {
 						continue;
 					}

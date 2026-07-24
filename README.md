@@ -27,7 +27,64 @@ and an "in my inventory only" filter) so you only ever pick real items. Clothing
 solely by its **Editor ID**, so presets stay readable and portable across load orders. Only
 items that expose an Editor ID at runtime are listed.
 
-Settings are saved to `Data/SKSE/Plugins/WeatherBehavior.json`.
+## Files
+
+Two things are written, both next to the DLL in `Data/SKSE/Plugins/`.
+
+**`WeatherBehavior.json`** — global settings, three keys:
+
+```json
+{
+  "enabled": true,
+  "onlyOutdoors": true,
+  "pollSeconds": 5
+}
+```
+
+| Key | Meaning |
+| --- | --- |
+| `enabled` | Master switch. Off unequips everything the mod added. |
+| `onlyOutdoors` | Skip NPCs standing in interior cells. |
+| `pollSeconds` | How often the background thread checks whether the weather/season changed. |
+
+**`WeatherBehavior/<preset>.json`** — your rules. One file per preset; the filename *is*
+the preset name. Share a preset by handing someone the file; drop one into that folder and
+press **Reload** in the menu to pick it up.
+
+```json
+{
+  "rules": [
+    {
+      "name": "Cloaks in bad weather",
+      "enabled": true,
+      "appliesTo": "everyone",
+      "chance": 70,
+      "weather": [
+        "Rainy",
+        "Snowy"
+      ],
+      "seasons": [],
+      "items": [
+        "Cloak_Winter01",
+        "Cloak_Winter02"
+      ]
+    }
+  ]
+}
+```
+
+| Key | Meaning |
+| --- | --- |
+| `name` | Label shown in the menu. Also seeds the random pick, so renaming a rule reshuffles which item each NPC gets. |
+| `enabled` | Whether the rule is considered at all. |
+| `appliesTo` | `"everyone"` or `"followers"`. |
+| `chance` | 0–100. Percent of NPCs this rule applies to. Fixed per NPC, so the same NPCs are always picked. |
+| `weather` | Any of `Pleasant`, `Cloudy`, `Rainy`, `Snowy`. **Empty means any weather.** |
+| `seasons` | Any of `Winter`, `Spring`, `Summer`, `Autumn`. **Empty means any season.** |
+| `items` | Editor IDs of the armor/clothing to choose from. One is picked per NPC. |
+
+The files are plain text and safe to hand-edit — names are matched case-insensitively, and
+anything unrecognised is ignored. Press **Reload** afterwards.
 
 ## Performance
 
