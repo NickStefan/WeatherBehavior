@@ -46,7 +46,7 @@ namespace
 SKSEPluginInfo(
 	.Version = { 1, 0, 0, 0 },
 	.Name = "WeatherBehavior",
-	.Author = "CompassOverlay")
+	.Author = "bottle")
 
 SKSEPluginLoad(const SKSE::LoadInterface* a_skse)
 {
