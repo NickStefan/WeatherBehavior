@@ -5,7 +5,6 @@
 #include <filesystem>
 #include <fstream>
 #include <map>
-#include <unordered_set>
 
 #include <Windows.h>
 
@@ -189,7 +188,7 @@ namespace WeatherBehavior
 		return out.empty() ? std::string{ "Preset" } : out;
 	}
 
-	void Config::Load()
+	std::size_t Config::Load()
 	{
 		std::scoped_lock lock(rulesMutex);
 
@@ -250,11 +249,15 @@ namespace WeatherBehavior
 		}
 
 		SKSE::log::info("Loaded {} rule(s)", rules.size());
+		return rules.size();
 	}
 
-	void Config::Save()
+	SaveResult Config::Save()
 	{
 		std::scoped_lock lock(rulesMutex);
+
+		SaveResult result;
+		result.rules = rules.size();
 
 		json root;
 		root["enabled"] = enabled.load(std::memory_order_relaxed);
@@ -264,6 +267,7 @@ namespace WeatherBehavior
 		if (mainFile.good()) {
 			mainFile << root.dump(2);
 		} else {
+			result.ok = false;
 			SKSE::log::error("Failed to open settings for writing: {}", SettingsPath().string());
 		}
 
@@ -271,6 +275,7 @@ namespace WeatherBehavior
 		const std::filesystem::path dir = PresetsFolder();
 		std::filesystem::create_directories(dir, ec);
 		if (ec) {
+			result.ok = false;
 			SKSE::log::error("Failed to create presets folder {}: {}", dir.string(), ec.message());
 		}
 
@@ -284,28 +289,15 @@ namespace WeatherBehavior
 			arr.push_back(RuleToJson(rule));
 		}
 
-		std::unordered_set<std::string> written;
-		for (const auto& [preset, arr] : presets) {
-			json proot;
-			proot["rules"] = arr;
-			const auto path = dir / (preset + ".json");
-			std::ofstream pf(path);
-			if (pf.good()) {
-				pf << proot.dump(2);
-				written.insert(preset);
-			} else {
-				SKSE::log::error("Failed to write preset {}", path.string());
-			}
-		}
-		SKSE::log::info("Saved {} preset file(s) to {}", written.size(), dir.string());
-
+		// Drop stale files before writing, so a rename that only changes case still renames the file
+		// on case-insensitive filesystems instead of leaving the old name behind.
 		if (std::filesystem::is_directory(dir, ec)) {
 			try {
 				for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
 					if (!entry.is_regular_file(ec) || entry.path().extension() != ".json") {
 						continue;
 					}
-					if (!written.contains(entry.path().stem().string())) {
+					if (!presets.contains(entry.path().stem().string())) {
 						std::filesystem::remove(entry.path(), ec);
 					}
 				}
@@ -313,6 +305,23 @@ namespace WeatherBehavior
 				SKSE::log::error("Failed to prune presets folder: {}", e.what());
 			}
 		}
+
+		for (const auto& [preset, arr] : presets) {
+			json proot;
+			proot["rules"] = arr;
+			const auto    path = dir / (preset + ".json");
+			std::ofstream pf(path);
+			if (pf.good()) {
+				pf << proot.dump(2);
+				++result.presets;
+			} else {
+				result.ok = false;
+				SKSE::log::error("Failed to write preset {}", path.string());
+			}
+		}
+		SKSE::log::info("Saved {} preset file(s) to {}", result.presets, dir.string());
+
+		return result;
 	}
 
 	std::string Config::PresetsLocation()

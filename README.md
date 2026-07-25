@@ -51,6 +51,11 @@ Two things are written, both next to the DLL in `Data/SKSE/Plugins/`.
 the preset name. Share a preset by handing someone the file; drop one into that folder and
 press **Reload** in the menu to pick it up.
 
+Each rule carries the preset it belongs to (the **Preset** field on the rule, which shows the
+file it will be written to). The **Presets** section lists every preset with a **Rename**
+button; renaming moves all of that preset's rules and renames the file on the next **Save**.
+Renaming a *rule* only changes its label inside the file — it does not rename the file.
+
 ```json
 {
   "rules": [
@@ -120,3 +125,6 @@ folder automatically.
 
 Copy `WeatherBehavior.dll` to `Data/SKSE/Plugins/`. Open the SKSE Menu Framework menu in game,
 go to *Weather Behavior → Configuration*, add a rule, pick your items, and press **Save**.
+
+Unsaved edits mark the button **Save \***; after saving, a green line confirms how many rules
+and preset files were written (red, if a write failed — the reason is in `WeatherBehavior.log`).

@@ -27,6 +27,13 @@ namespace WeatherBehavior
 		[[nodiscard]] std::uint32_t Seed() const;
 	};
 
+	struct SaveResult
+	{
+		bool        ok{ true };
+		std::size_t rules{ 0 };
+		std::size_t presets{ 0 };
+	};
+
 	class Config
 	{
 	public:
@@ -39,8 +46,8 @@ namespace WeatherBehavior
 		std::mutex        rulesMutex;
 		std::vector<Rule> rules;
 
-		void Load();
-		void Save();
+		std::size_t Load();
+		SaveResult  Save();
 
 		static std::string SanitizeFileName(std::string_view a_name);
 		static std::string PresetsLocation();

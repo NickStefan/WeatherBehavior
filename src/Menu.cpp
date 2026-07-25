@@ -23,10 +23,37 @@ namespace WeatherBehavior
 {
 	namespace
 	{
-		constexpr int kMaxShown = 300;
+		constexpr int    kMaxShown = 300;
+		constexpr double kStatusSeconds = 6.0;
+
+		constexpr ImVec4 kOkColor{ 0.45f, 0.85f, 0.45f, 1.0f };
+		constexpr ImVec4 kWarnColor{ 0.95f, 0.75f, 0.35f, 1.0f };
+		constexpr ImVec4 kErrorColor{ 0.90f, 0.40f, 0.40f, 1.0f };
 
 		char gItemSearch[128]{};
 		bool gInventoryOnly{ false };
+		bool gDirty{ false };
+
+		std::string gStatus;
+		ImVec4      gStatusColor{ kOkColor };
+		double      gStatusTime{ -kStatusSeconds };
+
+		char        gRenameBuf[128]{};
+		std::string gRenaming;
+
+		void SetStatus(std::string a_text, const ImVec4& a_color)
+		{
+			gStatus = std::move(a_text);
+			gStatusColor = a_color;
+			gStatusTime = ImGui::GetTime();
+		}
+
+		void CopyToBuf(char* a_buf, std::size_t a_size, std::string_view a_text)
+		{
+			const auto len = std::min(a_text.size(), a_size - 1);
+			std::memcpy(a_buf, a_text.data(), len);
+			a_buf[len] = '\0';
+		}
 
 		std::string ToLower(std::string_view a_text)
 		{
@@ -59,17 +86,18 @@ namespace WeatherBehavior
 			return nullptr;
 		}
 
-		void EditString(const char* a_label, std::string& a_value)
+		bool EditString(const char* a_label, std::string& a_value)
 		{
 			char buf[256];
-			std::strncpy(buf, a_value.c_str(), sizeof(buf) - 1);
-			buf[sizeof(buf) - 1] = '\0';
+			CopyToBuf(buf, sizeof(buf), a_value);
 			if (ImGui::InputText(a_label, buf, sizeof(buf))) {
 				a_value = buf;
+				return true;
 			}
+			return false;
 		}
 
-		void FlagCheckbox(const char* a_label, std::uint32_t& a_mask, std::uint32_t a_bit)
+		bool FlagCheckbox(const char* a_label, std::uint32_t& a_mask, std::uint32_t a_bit)
 		{
 			bool on = (a_mask & a_bit) != 0;
 			if (ImGui::Checkbox(a_label, &on)) {
@@ -78,7 +106,9 @@ namespace WeatherBehavior
 				} else {
 					a_mask &= ~a_bit;
 				}
+				return true;
 			}
+			return false;
 		}
 
 		bool ContainsString(const std::vector<std::string>& a_list, std::string_view a_value)
@@ -86,12 +116,14 @@ namespace WeatherBehavior
 			return std::find(a_list.begin(), a_list.end(), a_value) != a_list.end();
 		}
 
-		void RenderItemList(std::vector<std::string>& a_list)
+		bool RenderItemList(std::vector<std::string>& a_list)
 		{
+			bool changed = false;
 			for (int i = 0; i < static_cast<int>(a_list.size()); ++i) {
 				ImGui::PushID(i);
 				if (ImGui::SmallButton("X")) {
 					a_list.erase(a_list.begin() + i);
+					changed = true;
 					ImGui::PopID();
 					break;
 				}
@@ -104,10 +136,12 @@ namespace WeatherBehavior
 					ImGui::TextUnformatted(a_list[i].c_str());
 				}
 			}
+			return changed;
 		}
 
-		void RenderItemPicker(std::vector<std::string>& a_items)
+		bool RenderItemPicker(std::vector<std::string>& a_items)
 		{
+			bool changed = false;
 			if (!Po3GetEditorID()) {
 				ImGui::TextWrapped("powerofthree's Tweaks is required to list clothing here.");
 			}
@@ -116,7 +150,7 @@ namespace WeatherBehavior
 
 			const auto handler = RE::TESDataHandler::GetSingleton();
 			if (!handler) {
-				return;
+				return changed;
 			}
 
 			std::unordered_set<RE::FormID> playerItems;
@@ -165,6 +199,7 @@ namespace WeatherBehavior
 						ImGui::EndDisabled();
 					} else if (ImGui::SmallButton("Add")) {
 						a_items.emplace_back(edid);
+						changed = true;
 					}
 					ImGui::PopID();
 					ImGui::SameLine();
@@ -172,6 +207,7 @@ namespace WeatherBehavior
 				}
 			}
 			ImGui::EndChild();
+			return changed;
 		}
 
 		void RenderRule(Rule& a_rule, bool& a_deleteRequested)
@@ -183,23 +219,29 @@ namespace WeatherBehavior
 			if (ImGui::CollapsingHeader(header.c_str())) {
 				ImGui::Indent();
 
-				ImGui::Checkbox("Enabled", &a_rule.enabled);
-				EditString("Name", a_rule.name);
+				gDirty |= ImGui::Checkbox("Enabled", &a_rule.enabled);
+				gDirty |= EditString("Name", a_rule.name);
+
+				gDirty |= EditString("Preset", a_rule.preset);
+				ImGui::SameLine();
+				ImGui::TextDisabled("(saved as %s.json)", Config::SanitizeFileName(a_rule.preset).c_str());
 
 				int target = static_cast<int>(a_rule.target);
 				const char* targets[] = { "All NPCs", "Followers only" };
 				if (ImGui::Combo("Applies to", &target, targets, 2)) {
 					a_rule.target = static_cast<Target>(target);
+					gDirty = true;
 				}
 
 				int chance = static_cast<int>(a_rule.chance);
 				if (ImGui::SliderInt("Chance per NPC (%)", &chance, 0, 100)) {
 					a_rule.chance = static_cast<std::uint32_t>(chance);
+					gDirty = true;
 				}
 
 				ImGui::SeparatorText("Weather (none checked = any)");
 				for (std::uint32_t i = 0; i < kWeatherNames.size(); ++i) {
-					FlagCheckbox(kWeatherNames[i], a_rule.weatherMask, 1u << i);
+					gDirty |= FlagCheckbox(kWeatherNames[i], a_rule.weatherMask, 1u << i);
 					if (i + 1 < kWeatherNames.size()) {
 						ImGui::SameLine();
 					}
@@ -207,7 +249,7 @@ namespace WeatherBehavior
 
 				ImGui::SeparatorText("Season (none checked = any)");
 				for (std::uint32_t i = 0; i < kSeasonNames.size(); ++i) {
-					FlagCheckbox(kSeasonNames[i], a_rule.seasonMask, 1u << i);
+					gDirty |= FlagCheckbox(kSeasonNames[i], a_rule.seasonMask, 1u << i);
 					if (i + 1 < kSeasonNames.size()) {
 						ImGui::SameLine();
 					}
@@ -215,14 +257,8 @@ namespace WeatherBehavior
 
 				ImGui::Spacing();
 				if (ImGui::TreeNode(std::format("Items - one is picked per NPC ({})###items", a_rule.items.size()).c_str())) {
-					RenderItemList(a_rule.items);
-					RenderItemPicker(a_rule.items);
-					ImGui::TreePop();
-				}
-
-				ImGui::Spacing();
-				if (ImGui::TreeNode("Advanced")) {
-					EditString("Preset file", a_rule.preset);
+					gDirty |= RenderItemList(a_rule.items);
+					gDirty |= RenderItemPicker(a_rule.items);
 					ImGui::TreePop();
 				}
 
@@ -246,22 +282,49 @@ namespace WeatherBehavior
 			bool enabled = config.enabled.load(std::memory_order_relaxed);
 			if (ImGui::Checkbox("Enabled", &enabled)) {
 				config.enabled.store(enabled, std::memory_order_relaxed);
+				gDirty = true;
 			}
 			ImGui::SameLine();
 			bool outdoors = config.onlyOutdoors.load(std::memory_order_relaxed);
 			if (ImGui::Checkbox("Outdoors only", &outdoors)) {
 				config.onlyOutdoors.store(outdoors, std::memory_order_relaxed);
+				gDirty = true;
 			}
 			ImGui::SameLine();
-			if (ImGui::Button("Save")) {
-				config.Save();
+			if (ImGui::Button(gDirty ? "Save *" : "Save")) {
+				const auto result = config.Save();
 				Manager::GetSingleton().RequestApply();
+				gDirty = !result.ok;
+				if (result.ok) {
+					SetStatus(std::format("Saved {} rule(s) to {} preset file(s).", result.rules, result.presets),
+						kOkColor);
+				} else {
+					SetStatus("Save failed - see WeatherBehavior.log.", kErrorColor);
+				}
+			}
+			if (ImGui::IsItemHovered()) {
+				ImGui::SetTooltip("Writes the settings and preset files to\n%s", Config::PresetsLocation().c_str());
 			}
 			ImGui::SameLine();
 			if (ImGui::Button("Reload")) {
-				config.Load();
+				const auto count = config.Load();
 				Manager::GetSingleton().RequestApply();
+				gDirty = false;
+				gRenaming.clear();
+				SetStatus(std::format("Reloaded {} rule(s) from disk.", count), kOkColor);
 			}
+			if (ImGui::IsItemHovered()) {
+				ImGui::SetTooltip("Discards unsaved changes and re-reads the files from disk.");
+			}
+
+			if (ImGui::GetTime() - gStatusTime < kStatusSeconds && !gStatus.empty()) {
+				ImGui::SameLine();
+				ImGui::TextColored(gStatusColor, "%s", gStatus.c_str());
+			} else if (gDirty) {
+				ImGui::SameLine();
+				ImGui::TextColored(kWarnColor, "Unsaved changes");
+			}
+
 			ImGui::TextDisabled("Changes apply in game within a few seconds. Save writes them to disk.");
 
 			ImGui::SeparatorText("Rules");
@@ -270,6 +333,7 @@ namespace WeatherBehavior
 
 			if (ImGui::Button("+ Add rule")) {
 				config.rules.emplace_back();
+				gDirty = true;
 			}
 			ImGui::Spacing();
 
@@ -283,19 +347,67 @@ namespace WeatherBehavior
 			}
 			if (deleteIndex >= 0) {
 				config.rules.erase(config.rules.begin() + deleteIndex);
+				gDirty = true;
 			}
 
 			ImGui::Spacing();
-			if (ImGui::CollapsingHeader("Sharing presets")) {
-				ImGui::TextWrapped("Rules are saved as preset .json files, one per preset name. Share a file with "
-				                   "others, or drop one into the folder below and press Reload.");
+			if (ImGui::CollapsingHeader("Presets")) {
+				ImGui::TextWrapped("Rules are saved as preset .json files, one per preset name. Renaming a preset "
+				                   "renames its file on the next Save. Share a file with others, or drop one into "
+				                   "the folder below and press Reload.");
 				ImGui::TextDisabled("%s", Config::PresetsLocation().c_str());
+				ImGui::Spacing();
+
 				std::map<std::string, int> counts;
 				for (const auto& r : config.rules) {
-					counts[r.preset.empty() ? "Default" : r.preset]++;
+					counts[Config::SanitizeFileName(r.preset)]++;
 				}
+
 				for (const auto& [name, count] : counts) {
+					ImGui::PushID(name.c_str());
 					ImGui::BulletText("%s.json  -  %d rule(s)", name.c_str(), count);
+					if (gRenaming != name) {
+						ImGui::SameLine();
+						if (ImGui::SmallButton("Rename")) {
+							gRenaming = name;
+							CopyToBuf(gRenameBuf, sizeof(gRenameBuf), name);
+						}
+					} else {
+						ImGui::Indent();
+						ImGui::SetNextItemWidth(220.0f);
+						ImGui::InputText("##rename", gRenameBuf, sizeof(gRenameBuf));
+						const std::string target = Config::SanitizeFileName(gRenameBuf);
+						const bool       merges = target != name && counts.contains(target);
+
+						ImGui::SameLine();
+						if (ImGui::Button("Apply")) {
+							if (target != name) {
+								for (auto& r : config.rules) {
+									if (Config::SanitizeFileName(r.preset) == name) {
+										r.preset = target;
+									}
+								}
+								gDirty = true;
+								SetStatus(std::format("Preset renamed to {}.json - press Save to write it.", target),
+									kWarnColor);
+							}
+							gRenaming.clear();
+						}
+						ImGui::SameLine();
+						if (ImGui::Button("Cancel")) {
+							gRenaming.clear();
+						}
+
+						if (!gRenaming.empty()) {
+							ImGui::TextDisabled("Saves as %s.json", target.c_str());
+							if (merges) {
+								ImGui::TextColored(kWarnColor, "%s.json already exists - the rules will be merged.",
+									target.c_str());
+							}
+						}
+						ImGui::Unindent();
+					}
+					ImGui::PopID();
 				}
 			}
 		}
