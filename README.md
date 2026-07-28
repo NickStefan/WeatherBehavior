@@ -10,7 +10,8 @@ You define **rules**. Each rule targets **All NPCs** or **Followers only** and a
 under conditions you pick:
 
 - **Weather** — Pleasant / Cloudy / Rainy / Snowy (none checked = any)
-- **Season** — Winter / Spring / Summer / Autumn, derived from the in-game month (none = any)
+- **Season** — Winter / Spring / Summer / Autumn, derived from the in-game month
+  via the configured season calendar (none checked = any)
 
 When a rule is active, one item from its list is picked at random per NPC (the pick is
 deterministic per NPC, so it stays stable and a crowd shows variety). When the conditions
@@ -31,13 +32,14 @@ items that expose an Editor ID at runtime are listed.
 
 Two things are written, both next to the DLL in `Data/SKSE/Plugins/`.
 
-**`WeatherBehavior.json`** — global settings, three keys:
+**`WeatherBehavior.json`** — global settings:
 
 ```json
 {
   "enabled": true,
   "onlyOutdoors": true,
-  "pollSeconds": 5
+  "pollSeconds": 5,
+  "seasonCalendar": "vanilla"
 }
 ```
 
@@ -46,6 +48,7 @@ Two things are written, both next to the DLL in `Data/SKSE/Plugins/`.
 | `enabled` | Master switch. Off unequips everything the mod added. |
 | `onlyOutdoors` | Skip NPCs standing in interior cells. |
 | `pollSeconds` | How often the background thread checks whether the weather/season changed. |
+| `seasonCalendar` | How months map to seasons: `"vanilla"` (default) or `"fourSeasons"` (e.g. seasons change each month). |
 
 **`WeatherBehavior/<preset>.json`** — your rules. One file per preset; the filename *is*
 the preset name. Share a preset by handing someone the file; drop one into that folder and

@@ -85,6 +85,16 @@ namespace WeatherBehavior
 		       });
 	}
 
+	void Config::ApplySeasonCalendar()
+	{
+		if (EqualsNoCase(seasonCalendar, kSeasonCalendarFourSeasons)) {
+			seasonCalendar = std::string(kSeasonCalendarFourSeasons);
+		} else {
+			seasonCalendar = std::string(kSeasonCalendarVanilla);
+		}
+		monthSeasons = MonthSeasonsForCalendar(seasonCalendar);
+	}
+
 	template <class T>
 	static json NamesFromMask(std::uint32_t a_mask, const T& a_names)
 	{
@@ -202,11 +212,14 @@ namespace WeatherBehavior
 				enabled.store(root.value("enabled", true), std::memory_order_relaxed);
 				onlyOutdoors.store(root.value("onlyOutdoors", true), std::memory_order_relaxed);
 				pollSeconds.store(std::clamp<std::uint32_t>(root.value("pollSeconds", 5u), 1, 600), std::memory_order_relaxed);
+				seasonCalendar = root.value("seasonCalendar", std::string(kSeasonCalendarVanilla));
+				ApplySeasonCalendar();
 			} catch (const std::exception& e) {
 				SKSE::log::error("Failed to parse settings: {}", e.what());
 			}
 		} else {
 			SKSE::log::info("No settings file, using defaults");
+			ApplySeasonCalendar();
 		}
 
 		std::error_code ec;
@@ -263,6 +276,7 @@ namespace WeatherBehavior
 		root["enabled"] = enabled.load(std::memory_order_relaxed);
 		root["onlyOutdoors"] = onlyOutdoors.load(std::memory_order_relaxed);
 		root["pollSeconds"] = pollSeconds.load(std::memory_order_relaxed);
+		root["seasonCalendar"] = seasonCalendar;
 		std::ofstream mainFile(SettingsPath());
 		if (mainFile.good()) {
 			mainFile << root.dump(2);

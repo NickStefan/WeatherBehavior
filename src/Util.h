@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <string_view>
 
 namespace WeatherBehavior
 {
@@ -32,6 +33,51 @@ namespace WeatherBehavior
 	inline constexpr std::array kWeatherNames{ "Pleasant", "Cloudy", "Rainy", "Snowy" };
 	inline constexpr std::array kSeasonNames{ "Winter", "Spring", "Summer", "Autumn" };
 
+	using MonthSeasonTable = std::array<std::uint32_t, 12>;
+
+	// Indices match RE::Calendar::Month (Morning Star = 0 … Evening Star = 11).
+	inline constexpr MonthSeasonTable kVanillaMonthSeasons{
+		kWinter,  // Morning Star
+		kWinter,  // Sun's Dawn
+		kSpring,  // First Seed
+		kSpring,  // Rain's Hand
+		kSpring,  // Second Seed
+		kSummer,  // Midyear
+		kSummer,  // Sun's Height
+		kSummer,  // Last Seed
+		kAutumn,  // Hearthfire
+		kAutumn,  // Frostfall
+		kAutumn,  // Sun's Dusk
+		kWinter,  // Evening Star
+	};
+
+	// Four Seasons mod calendar (alternating seasons each month).
+	inline constexpr MonthSeasonTable kFourSeasonsMonthSeasons{
+		kAutumn,  // Morning Star
+		kWinter,  // Sun's Dawn
+		kSpring,  // First Seed
+		kSummer,  // Rain's Hand
+		kAutumn,  // Second Seed
+		kWinter,  // Midyear
+		kSpring,  // Sun's Height
+		kSummer,  // Last Seed
+		kAutumn,  // Hearthfire
+		kWinter,  // Frostfall
+		kSpring,  // Sun's Dusk
+		kSummer,  // Evening Star
+	};
+
+	inline constexpr std::string_view kSeasonCalendarVanilla{ "vanilla" };
+	inline constexpr std::string_view kSeasonCalendarFourSeasons{ "fourSeasons" };
+
+	[[nodiscard]] inline const MonthSeasonTable& MonthSeasonsForCalendar(std::string_view a_calendar)
+	{
+		if (a_calendar == kSeasonCalendarFourSeasons) {
+			return kFourSeasonsMonthSeasons;
+		}
+		return kVanillaMonthSeasons;
+	}
+
 	inline std::uint32_t WeatherClassOf(const RE::TESWeather* a_weather)
 	{
 		if (!a_weather) {
@@ -40,23 +86,8 @@ namespace WeatherBehavior
 		return static_cast<std::uint32_t>(a_weather->data.flags.underlying()) & kAnyWeather;
 	}
 
-	inline std::uint32_t SeasonBitOf(std::uint32_t a_month)
+	inline std::uint32_t SeasonBitOf(std::uint32_t a_month, const MonthSeasonTable& a_table)
 	{
-		switch (a_month) {
-		case RE::Calendar::Month::kEveningStar:
-		case RE::Calendar::Month::kMorningStar:
-		case RE::Calendar::Month::kSunsDawn:
-			return kWinter;
-		case RE::Calendar::Month::kFirstSeed:
-		case RE::Calendar::Month::kRainsHand:
-		case RE::Calendar::Month::kSecondSeed:
-			return kSpring;
-		case RE::Calendar::Month::kMidyear:
-		case RE::Calendar::Month::kSunsHeight:
-		case RE::Calendar::Month::kLastSeed:
-			return kSummer;
-		default:
-			return kAutumn;
-		}
+		return a_table[a_month % a_table.size()];
 	}
 }

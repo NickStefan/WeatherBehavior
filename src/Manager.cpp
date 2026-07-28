@@ -108,7 +108,7 @@ namespace WeatherBehavior
 		}
 
 		const std::uint32_t weather = WeatherClassOf(sky->currentWeather);
-		const std::uint32_t season = SeasonBitOf(calendar->GetMonth());
+		const std::uint32_t season = SeasonBitOf(calendar->GetMonth(), config.monthSeasons);
 		const bool onlyOutdoors = config.onlyOutdoors.load(std::memory_order_relaxed);
 
 		std::vector<ActiveRule> active;

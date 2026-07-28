@@ -3,6 +3,7 @@
 #include <atomic>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "Util.h"
@@ -43,11 +44,15 @@ namespace WeatherBehavior
 		std::atomic<bool>          onlyOutdoors{ true };
 		std::atomic<std::uint32_t> pollSeconds{ 5 };
 
-		std::mutex        rulesMutex;
-		std::vector<Rule> rules;
+		std::mutex         rulesMutex;
+		std::vector<Rule>  rules;
+		std::string        seasonCalendar{ std::string(kSeasonCalendarVanilla) };
+		MonthSeasonTable   monthSeasons{ kVanillaMonthSeasons };
 
 		std::size_t Load();
 		SaveResult  Save();
+
+		void ApplySeasonCalendar();
 
 		static std::string SanitizeFileName(std::string_view a_name);
 		static std::string PresetsLocation();
