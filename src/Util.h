@@ -51,8 +51,8 @@ namespace WeatherBehavior
 		kWinter,  // Evening Star
 	};
 
-	// Four Seasons mod calendar (alternating seasons each month).
-	inline constexpr MonthSeasonTable kFourSeasonsMonthSeasons{
+	// Monthly calendar (season changes each month; e.g. Four Seasons - Faster Seasons).
+	inline constexpr MonthSeasonTable kMonthlyMonthSeasons{
 		kAutumn,  // Morning Star
 		kWinter,  // Sun's Dawn
 		kSpring,  // First Seed
@@ -68,12 +68,12 @@ namespace WeatherBehavior
 	};
 
 	inline constexpr std::string_view kSeasonCalendarVanilla{ "vanilla" };
-	inline constexpr std::string_view kSeasonCalendarFourSeasons{ "fourSeasons" };
+	inline constexpr std::string_view kSeasonCalendarMonthly{ "monthly" };
 
 	[[nodiscard]] inline const MonthSeasonTable& MonthSeasonsForCalendar(std::string_view a_calendar)
 	{
-		if (a_calendar == kSeasonCalendarFourSeasons) {
-			return kFourSeasonsMonthSeasons;
+		if (a_calendar == kSeasonCalendarMonthly) {
+			return kMonthlyMonthSeasons;
 		}
 		return kVanillaMonthSeasons;
 	}

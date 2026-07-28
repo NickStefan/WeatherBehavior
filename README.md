@@ -48,7 +48,7 @@ Two things are written, both next to the DLL in `Data/SKSE/Plugins/`.
 | `enabled` | Master switch. Off unequips everything the mod added. |
 | `onlyOutdoors` | Skip NPCs standing in interior cells. |
 | `pollSeconds` | How often the background thread checks whether the weather/season changed. |
-| `seasonCalendar` | How months map to seasons: `"vanilla"` (default) or `"fourSeasons"` (e.g. seasons change each month). |
+| `seasonCalendar` | How months map to seasons: `"vanilla"` (default) or `"monthly"` (seasons change every month, e.g. Four Seasons - Faster Seasons). |
 
 **`WeatherBehavior/<preset>.json`** — your rules. One file per preset; the filename *is*
 the preset name. Share a preset by handing someone the file; drop one into that folder and

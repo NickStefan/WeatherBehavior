@@ -291,12 +291,12 @@ namespace WeatherBehavior
 				gDirty = true;
 			}
 
-			const char* calendarItems[] = { "Vanilla", "Four Seasons" };
-			int calendarIndex = config.seasonCalendar == kSeasonCalendarFourSeasons ? 1 : 0;
+			const char* calendarItems[] = { "Vanilla", "Monthly" };
+			int calendarIndex = config.seasonCalendar == kSeasonCalendarMonthly ? 1 : 0;
 			ImGui::SetNextItemWidth(160.0f);
 			if (ImGui::Combo("Season calendar", &calendarIndex, calendarItems, 2)) {
 				config.seasonCalendar = calendarIndex == 1 ?
-					std::string(kSeasonCalendarFourSeasons) :
+					std::string(kSeasonCalendarMonthly) :
 					std::string(kSeasonCalendarVanilla);
 				config.ApplySeasonCalendar();
 				gDirty = true;
@@ -304,7 +304,7 @@ namespace WeatherBehavior
 			if (ImGui::IsItemHovered()) {
 				ImGui::SetTooltip(
 					"How in-game months map to Winter/Spring/Summer/Autumn.\n"
-					"Choose Four Seasons if you use that weather/season overhaul.");
+					"Monthly: seasons change every month (e.g. Four Seasons - Faster Seasons).");
 			}
 
 			ImGui::SameLine();

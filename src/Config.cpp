@@ -87,8 +87,8 @@ namespace WeatherBehavior
 
 	void Config::ApplySeasonCalendar()
 	{
-		if (EqualsNoCase(seasonCalendar, kSeasonCalendarFourSeasons)) {
-			seasonCalendar = std::string(kSeasonCalendarFourSeasons);
+		if (EqualsNoCase(seasonCalendar, kSeasonCalendarMonthly)) {
+			seasonCalendar = std::string(kSeasonCalendarMonthly);
 		} else {
 			seasonCalendar = std::string(kSeasonCalendarVanilla);
 		}
