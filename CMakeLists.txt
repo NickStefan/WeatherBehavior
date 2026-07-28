@@ -69,6 +69,11 @@ target_precompile_headers(${PROJECT_NAME}
 		<SKSE/SKSE.h>
 )
 
+if(MSVC)
+	target_compile_options(${PROJECT_NAME} PRIVATE /Zi)
+	target_link_options(${PROJECT_NAME} PRIVATE "$<$<CONFIG:Release>:/DEBUG;/OPT:REF;/OPT:ICF>")
+endif()
+
 # ---- Output ----
 if(DEFINED ENV{SKYRIM_MODS_FOLDER})
 	set(OUTPUT_FOLDER "$ENV{SKYRIM_MODS_FOLDER}/WeatherBehavior/SKSE/Plugins")

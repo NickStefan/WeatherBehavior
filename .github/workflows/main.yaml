@@ -1,0 +1,26 @@
+name: Main
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  run:
+    # if: github.repository_owner == 'foo'
+    uses: adya/pack-skse-mod/.github/workflows/pack.yml@main
+    with:
+      CMAKE_SE_CONFIG_PRESET: ''
+      CMAKE_AE_CONFIG_PRESET: 'release'
+      CMAKE_VR_CONFIG_PRESET: ''
+
+      CMAKE_BINARY_NAME: "WeatherBehavior"
+      CMAKE_BINARY_VERSION: "1.0.0"
+      CMAKE_AE_BINARY_DIR: 'build/release'
+
+      FOMOD_MOD_NAME: "WeatherBehavior - Custom Seasons"
+      FOMOD_MOD_AUTHOR: "InTheBottle"
